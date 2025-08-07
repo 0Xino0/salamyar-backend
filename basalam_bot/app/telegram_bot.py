@@ -13,10 +13,12 @@ from .search_engine import search_stalls
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Parse incoming message and reply with matching stalls."""
+    """Parse incoming message and reply with matching stalls and Gemini raw output."""
     if not update.message:
         return
-    products = extract_products(update.message.text)
+    products, raw_output = extract_products(update.message.text)
+    # Send the raw Gemini output first
+    await update.message.reply_text(f"Gemini raw output:\n{raw_output}")
     stalls = search_stalls(products)
     if not stalls:
         await update.message.reply_text("محصولی یافت نشد.")
