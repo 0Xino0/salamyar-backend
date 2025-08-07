@@ -1,36 +1,29 @@
 # Environment variables
-# فایل‌های محیطی که حاوی اطلاعات حساس مانند توکن‌ها هستند
 .env
 
 # Virtual Environment
-# پوشه محیط مجازی که شامل تمام کتابخانه‌های نصب شده است
-venv/
+پvenv/
 .venv/
 
 # Python cache files
-# فایل‌های کش و بایت‌کد پایتون که به صورت خودکار ساخته می‌شوند
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
 # IDE and editor specific files
-# فایل‌های تنظیمات مخصوص ویرایشگرهای کد
 .vscode/
 .idea/
 
 # OS-specific files
-# فایل‌های سیستمی که توسط سیستم‌عامل‌ها ساخته می‌شوند
 .DS_Store
 Thumbs.db
 
 # Build and distribution artifacts
-# فایل‌های مربوط به بیلد و توزیع پکیج
 build/
 dist/
 *.egg-info/
 
 # Test artifacts
-# فایل‌های مربوط به تست و گزارش‌های پوشش کد
 .pytest_cache/
 .coverage
