@@ -2,7 +2,7 @@
 .env
 
 # Virtual Environment
-پvenv/
+venv/
 .venv/
 
 # Python cache files
