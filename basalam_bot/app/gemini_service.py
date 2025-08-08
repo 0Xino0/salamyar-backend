@@ -30,10 +30,13 @@ def extract_products(message: str) -> tuple[list[str], str]:
     # Try to safely parse the response as JSON
     import json
     try:
-        data = json.loads(raw_output)
+        # Clean the raw output by removing Markdown-like formatting
+        cleaned_output = raw_output.strip('```json').strip()
+        data = json.loads(cleaned_output)
         if isinstance(data, dict) and "products" in data:
             products = data["products"]
-            return [str(p).strip().lower() for p in products if isinstance(p, str)], raw_output
-    except json.JSONDecodeError:
-        pass
+            return [str(p).strip() for p in products if isinstance(p, str)], raw_output
+    except json.JSONDecodeError as e:
+        # Debugging: Log the error if JSON parsing fails
+        print(f"JSONDecodeError: {e}")
     return [], raw_output
