@@ -11,14 +11,15 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 genai.configure(api_key=GEMINI_API_KEY)
 
 # Prompt template for extracting product names
-EXTRACTION_PROMPT = (
-    """
-    You are an expert product name extractor. Given a user message, extract all product names mentioned in the text. 
-    Return ONLY a Python list of product names (as strings, in the original language), nothing else. 
-    Example: ['تونر', 'برش', 'کرم']
-    Message: {message}
-    """
-)
+EXTRACTION_PROMPT = """You are a versatile and intelligent extraction assistant for an e-commerce platform. Analyze Persian user messages with extreme precision and extract accurate product names. Your process must include: 1. Correcting all spelling errors and Farsi-glish. 2. Identifying associated brands and combining them with the product name. 3. Ignoring all extra words and conversational phrases. Your final output should be a pure and precise list of complete product names, ready for a database search.
+Return the response in JSON format with the following structure:
+{{
+    "products": ["product1", "product2"],
+    "confidence": 0.95,
+    "language": "fa",
+    "extracted_count": 2
+}}
+Message: {message}"""
 
 def extract_products(message: str) -> tuple[list[str], str]:
     """Extract product names from message using Google Gemini AI. Returns (product_list, raw_output)."""
@@ -26,12 +27,13 @@ def extract_products(message: str) -> tuple[list[str], str]:
     prompt = EXTRACTION_PROMPT.format(message=message)
     response = model.generate_content(prompt)
     raw_output = response.text.strip()
-    # Try to safely evaluate the response as a Python list
-    import ast
+    # Try to safely parse the response as JSON
+    import json
     try:
-        products = ast.literal_eval(raw_output)
-        if isinstance(products, list):
+        data = json.loads(raw_output)
+        if isinstance(data, dict) and "products" in data:
+            products = data["products"]
             return [str(p).strip().lower() for p in products if isinstance(p, str)], raw_output
-    except Exception:
+    except json.JSONDecodeError:
         pass
     return [], raw_output

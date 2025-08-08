@@ -9,7 +9,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
 
 from .gemini_service import extract_products
-from .search_engine import search_stalls
+from .search_engine import search_vendor_overlap
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -17,14 +17,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if not update.message:
         return
     products, raw_output = extract_products(update.message.text)
-    # Send the raw Gemini output first
-    await update.message.reply_text(f"Gemini raw output:\n{raw_output}")
-    stalls = search_stalls(products)
-    if not stalls:
-        await update.message.reply_text("محصولی یافت نشد.")
+    # Format and send the Gemini JSON output first
+    formatted_output = "Gemini AI Analysis:\n"
+    formatted_output += "═══════════════\n"
+    formatted_output += f"{raw_output}\n"
+    formatted_output += "═══════════════"
+    await update.message.reply_text(formatted_output)
+    
+    # Call Basalam per product, find overlapping vendors, and present minimal JSON
+    # Run the blocking search in a thread to avoid blocking the async handler
+    matches = await asyncio.to_thread(search_vendor_overlap, products)
+    if not matches:
+        await update.message.reply_text("محصول مشترکی بین غرفه‌ها یافت نشد.")
         return
-    lines = [f"{stall['name']}: {', '.join(stall['products'])}" for stall in stalls]
-    await update.message.reply_text("\n".join(lines))
+    # Respond as JSON with required fields
+    import json
+    await update.message.reply_text(
+        json.dumps(matches, ensure_ascii=False, indent=2)
+    )
 
 
 def start_bot() -> None:
