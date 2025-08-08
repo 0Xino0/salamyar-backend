@@ -15,26 +15,15 @@ def _fetch_search_results_for_product(query: str) -> Dict[str, Any]:
     """
     try:
         with httpx.Client(timeout=15) as client:
-            # Primary attempt: POST with 'query'
-            response = client.post(
-                BASALAM_SEARCH_URL,
-                json={"query": str(query), "page": 1},
-                headers={"Accept": "application/json"},
-            )
-            if response.status_code == 200:
-                return response.json()
-            # Fallback attempt: POST with 'keyword'
-            response = client.post(
-                BASALAM_SEARCH_URL,
-                json={"keyword": str(query), "page": 1},
-                headers={"Accept": "application/json"},
-            )
-            if response.status_code == 200:
-                return response.json()
-            # Fallback attempt: GET with query param
+            # Official GET pattern per spec: from=0, q, size=24, adsImpressionDisable=true, grouped=false
             response = client.get(
                 BASALAM_SEARCH_URL,
-                params={"query": str(query), "page": 1},
+                params={
+                    "from": 0,
+                    "q": str(query),
+                    "size": 24,
+                    "adsImpressionDisable": True,
+                },
                 headers={"Accept": "application/json"},
             )
             if response.status_code == 200:
@@ -59,32 +48,45 @@ def _extract_minimal_products(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
             {
                 "product_id": product_id,
                 "product_name": product_name,
-                "booth_id": vendor_id,
-                "booth_name": vendor_name,
+                "vendor_id": vendor_id,
+                "vendor_name": vendor_name,
             }
         )
     return products
 
 
-def search_vendor_overlap(products: List[str]) -> List[Dict[str, Any]]:
-    """For each product term, search Basalam, then return items whose vendor appears across all requested products.
+def search_vendor_overlap(products: List[str]) -> Dict[str, Any]:
+    """For each product term, search Basalam, then compute vendors that appear across
+    at least two distinct product searches.
 
-    Returns a flat list of objects with keys: product_id, product_name, booth_id, booth_name.
+    Returns a dict with:
+      - matches: flat list of minimal items with keys:
+          product_id, product_name, vendor_id, vendor_name, query_term
+        (only for overlapping vendors)
+      - vendors: list of {vendor_id, vendor_name, matched_products} indicating how many
+        of the user's requested products each vendor covers
     """
     if not products:
-        return []
+        return {"matches": [], "vendors": []}
 
     per_query_results: List[List[Dict[str, Any]]] = []
     for term in products:
         payload = _fetch_search_results_for_product(term)
         minimal = _extract_minimal_products(payload)
+        # annotate each item with its originating query term for downstream grouping
+        for item in minimal:
+            item["query_term"] = term
         per_query_results.append(minimal)
 
     # Track vendor presence across distinct query indices
     vendor_to_query_indices: DefaultDict[int, Set[int]] = defaultdict(set)
+    vendor_names: Dict[int, str] = {}
     for query_index, items in enumerate(per_query_results):
         for item in items:
-            vendor_to_query_indices[item["booth_id"]].add(query_index)
+            vendor_id = item["vendor_id"]
+            vendor_to_query_indices[vendor_id].add(query_index)
+            if vendor_id not in vendor_names and item.get("vendor_name"):
+                vendor_names[vendor_id] = item["vendor_name"]
 
     # Vendors that appear in at least two different product queries
     overlapping_vendors: Set[int] = {
@@ -92,23 +94,38 @@ def search_vendor_overlap(products: List[str]) -> List[Dict[str, Any]]:
     }
 
     if not overlapping_vendors:
-        return []
+        return {"matches": [], "vendors": []}
 
     # Flatten all items but keep only those belonging to overlapping vendors
-    output: List[Dict[str, Any]] = []
+    output_items: List[Dict[str, Any]] = []
     for items in per_query_results:
         for item in items:
-            if item["booth_id"] in overlapping_vendors:
-                output.append(item)
+            if item["vendor_id"] in overlapping_vendors:
+                output_items.append(item)
 
     # De-duplicate identical product entries (same product_id)
     seen_product_ids: Set[int] = set()
-    deduped: List[Dict[str, Any]] = []
-    for item in output:
+    deduped_items: List[Dict[str, Any]] = []
+    for item in output_items:
         pid = item["product_id"]
         if pid in seen_product_ids:
+            # Keep the first occurrence; it already contains a query_term
             continue
         seen_product_ids.add(pid)
-        deduped.append(item)
+        deduped_items.append(item)
 
-    return deduped
+    # Build vendor summary with matched product count (count of distinct queries matched)
+    vendors_summary: List[Dict[str, Any]] = []
+    for vendor_id in sorted(overlapping_vendors):
+        vendors_summary.append(
+            {
+                "vendor_id": vendor_id,
+                "vendor_name": vendor_names.get(vendor_id, ""),
+                "matched_products": len(vendor_to_query_indices[vendor_id]),
+            }
+        )
+
+    # Sort vendors by matched count desc, then by name
+    vendors_summary.sort(key=lambda v: (-v["matched_products"], v.get("vendor_name") or ""))
+
+    return {"matches": deduped_items, "vendors": vendors_summary}

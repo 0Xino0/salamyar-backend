@@ -9,7 +9,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
 
 from .gemini_service import extract_products
-from .search_engine import search_vendor_overlap, _fetch_search_results_for_product
+from .search_engine import search_vendor_overlap
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -17,36 +17,51 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if not update.message:
         return
     products, raw_output = extract_products(update.message.text)
-    # Format and send the Gemini JSON output first
-    formatted_output += "\n\nExtracted Products:\n"
-    formatted_output += f"{products}\n"
-    formatted_output += "═══════════════\n"
-    await update.message.reply_text(formatted_output)
-    
-    # Call Basalam per product, find overlapping vendors, and present minimal JSON
-    # Run the blocking search in a thread to avoid blocking the async handler
-    matches = await asyncio.to_thread(search_vendor_overlap, products)
-    if not matches:
-        await update.message.reply_text("محصول مشترکی بین غرفه‌ها یافت نشد.")
+    if not products:
+        await update.message.reply_text("محصولی یافت نشد.")
         return
-    # Respond as JSON with required fields
-    import json
-    await update.message.reply_text(
-        json.dumps(matches, ensure_ascii=False, indent=2)
-    )
+    # Call Basalam per product, find overlapping vendors
+    # Run the blocking search in a thread to avoid blocking the async handler
+    result = await asyncio.to_thread(search_vendor_overlap, products)
+    vendors = result.get("vendors", [])
+    items = result.get("matches", [])
+    if not vendors:
+        await update.message.reply_text("هیچ غرفه‌ای حداقل دو محصول درخواستی شما را ندارد.")
+        return
+    # Prepare per-vendor, per-query grouped messages with product URLs
+    # Build lookup of items by (vendor_id, query_term)
+    from collections import defaultdict
+    grouped: dict[tuple[int, str], list[dict]] = defaultdict(list)
+    for it in items:
+        key = (it.get("vendor_id"), it.get("query_term") or "")
+        grouped[key].append(it)
 
-    # Debugging: Send raw output of Basalam search for each product with status code and error handling
-    for term in products:
-        try:
-            payload = await asyncio.to_thread(_fetch_search_results_for_product, term)
-            if not payload:
-                await update.message.reply_text(f"Raw output for product '{term}': EMPTY RESPONSE")
-            else:
-                await update.message.reply_text(
-                    f"Raw output for product '{term}':\n" + json.dumps(payload, ensure_ascii=False, indent=2)
-                )
-        except Exception as e:
-            await update.message.reply_text(f"Error fetching data for product '{term}': {str(e)}")
+    BASE_URL = "https://basalam.com"
+
+    for vendor in vendors:
+        vendor_id = vendor["vendor_id"]
+        vendor_name = vendor.get("vendor_name") or ""
+        # Start message with vendor heading
+        lines: list[str] = [f"{vendor_name} (ID: {vendor_id})", ""]
+        # For each original query in order, list products of this vendor that match that query
+        for term in products:
+            vendor_query_items = grouped.get((vendor_id, term), [])
+            if not vendor_query_items:
+                continue
+            lines.append(f"{term}:")
+            lines.append("")
+            for it in vendor_query_items:
+                product_name = it.get("product_name") or ""
+                product_id = it.get("product_id")
+                # Construct product address per requested pattern
+                product_address = f"{BASE_URL}/p/{product_id}"
+                lines.append(product_name)
+                lines.append(product_address)
+                lines.append("")
+        # Send one message per vendor
+        message_text = "\n".join(lines).strip()
+        if message_text:
+            await update.message.reply_text(message_text)
 
 
 def start_bot() -> None:
