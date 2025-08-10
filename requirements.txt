@@ -1,7 +1,9 @@
 fastapi
 uvicorn
-python-telegram-bot
 httpx
 python-dotenv
 pydantic
-google-generativeai
+pydantic-settings
+# Optional: Keep these if you want to maintain Telegram bot functionality
+# python-telegram-bot
+# google-generativeai

@@ -27,3 +27,6 @@ dist/
 # Test artifacts
 .pytest_cache/
 .coverage
+
+#json files
+*.json
