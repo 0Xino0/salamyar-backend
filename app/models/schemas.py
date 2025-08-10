@@ -60,6 +60,7 @@ class SelectProductRequest(BaseModel):
     vendor_name: str
     status_id: int
     image_url: Optional[str] = None
+    search_session_id: Optional[str] = None  # To track which search this product came from
 
 
 class SelectedProduct(BaseModel):
@@ -72,6 +73,7 @@ class SelectedProduct(BaseModel):
     status_id: int
     image_url: Optional[str] = None
     selected_at: datetime
+    search_session_id: Optional[str] = None  # Track search session
 
 
 class SelectedProductsResponse(BaseModel):
@@ -83,6 +85,37 @@ class SelectedProductsResponse(BaseModel):
 class RemoveProductRequest(BaseModel):
     """Request model for removing a selected product."""
     product_id: int
+
+
+# Shopping cart confirmation models
+class SimilarProduct(BaseModel):
+    """Model for a similar product found via MLT API."""
+    id: int
+    name: str
+    price: float
+    vendor_id: int
+    vendor_name: str
+    status_id: int
+    image_url: Optional[str] = None
+    basalam_url: str  # https://basalam.com/q/{product_id}
+    original_product_id: int  # Which user's selected product this is similar to
+
+
+class VendorMatch(BaseModel):
+    """Model for a vendor that has multiple products from user's selection."""
+    vendor_id: int
+    vendor_name: str
+    matched_products_count: int  # How many of user's products this vendor has
+    user_selected_products: List[int]  # IDs of user's selected products
+    similar_products: List[SimilarProduct]  # Similar products from this vendor
+
+
+class CartConfirmationResponse(BaseModel):
+    """Response model for cart confirmation."""
+    total_selected_products: int
+    total_similar_products_found: int
+    vendors_with_multiple_matches: List[VendorMatch]
+    processing_summary: dict  # Summary of processing for each selected product
 
 
 # Generic response models

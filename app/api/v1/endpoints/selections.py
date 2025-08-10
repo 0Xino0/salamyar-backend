@@ -8,10 +8,12 @@ from app.models.schemas import (
     SelectedProductsResponse,
     RemoveProductRequest,
     MessageResponse,
-    ErrorResponse
+    ErrorResponse,
+    CartConfirmationResponse
 )
 from app.core.dependencies import get_selection_service
 from app.services.product_selection_service import ProductSelectionService
+from app.services.similar_products_service import SimilarProductsService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -190,4 +192,65 @@ async def clear_selected_products(
         raise HTTPException(
             status_code=500,
             detail="Failed to clear selected products. Please try again."
+        )
+
+
+@router.post(
+    "/confirm",
+    response_model=CartConfirmationResponse,
+    responses={
+        400: {"model": ErrorResponse, "description": "No products selected"},
+        500: {"model": ErrorResponse, "description": "Internal server error"},
+    },
+    summary="Confirm shopping cart and find vendor overlaps",
+    description="Analyze selected products and find vendors with multiple matching items",
+    tags=["Product Selection"]
+)
+async def confirm_shopping_cart(
+    selection_service: ProductSelectionService = Depends(get_selection_service)
+):
+    """
+    Confirm the shopping cart and find vendor overlaps.
+    
+    This endpoint:
+    1. Takes all selected products from the user's cart
+    2. For each product, finds up to 100 similar products using Basalam's MLT API
+    3. Analyzes vendors that have similar products for multiple selected items
+    4. Returns vendors with at least 2 matches along with product links
+    
+    **Returns:**
+    - Analysis of vendor overlaps
+    - Similar products found for each selected product
+    - Vendors that carry multiple items from the user's selection
+    - Direct links to products on Basalam (https://basalam.com/q/{product_id})
+    """
+    try:
+        logger.info("Starting shopping cart confirmation process")
+        
+        # Get all selected products
+        selections = selection_service.get_selected_products()
+        
+        if not selections.products:
+            raise HTTPException(
+                status_code=400,
+                detail="No products selected. Please select some products first."
+            )
+        
+        logger.info(f"Processing cart confirmation for {selections.total_count} selected products")
+        
+        # Create similar products service and analyze vendor overlaps
+        similar_products_service = SimilarProductsService()
+        result = await similar_products_service.find_vendor_overlaps(selections.products)
+        
+        logger.info(f"Cart confirmation completed: found {len(result.vendors_with_multiple_matches)} vendors with multiple matches")
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error during cart confirmation: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to process cart confirmation. Please try again."
         )

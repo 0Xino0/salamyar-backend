@@ -145,6 +145,51 @@ Remove all products from the selection list.
 }
 ```
 
+#### Confirm Shopping Cart
+**Endpoint:** `POST /api/v1/selections/confirm`
+
+Analyze selected products and find vendors with multiple matching items. This endpoint:
+1. Takes all selected products from the user's cart
+2. For each product, finds up to 100 similar products using Basalam's MLT API
+3. Analyzes vendors that have similar products for multiple selected items
+4. Returns vendors with at least 2 matches along with product links
+
+**Example Response:**
+```json
+{
+  "total_selected_products": 3,
+  "total_similar_products_found": 287,
+  "vendors_with_multiple_matches": [
+    {
+      "vendor_id": 52878,
+      "vendor_name": "دستسازه های هنری دستینه",
+      "matched_products_count": 2,
+      "user_selected_products": [17881765, 16175727],
+      "similar_products": [
+        {
+          "id": 16143448,
+          "name": "جامدادی چرمی طرح زبان انگلیسی",
+          "price": 900000.0,
+          "vendor_id": 52878,
+          "vendor_name": "دستسازه های هنری دستینه",
+          "status_id": 2976,
+          "image_url": "https://statics.basalam.com/.../image.jpg",
+          "basalam_url": "https://basalam.com/q/16143448",
+          "original_product_id": 17881765
+        }
+      ]
+    }
+  ],
+  "processing_summary": {
+    "17881765": {
+      "product_name": "جامدادی چرمی عکاس دوربین عکاسی",
+      "similar_products_found": 95,
+      "vendors_found": 23
+    }
+  }
+}
+```
+
 ### 3. Health Check
 
 #### Basic Health Check
@@ -235,6 +280,16 @@ class ProductSearch {
 
 ```javascript
 class ProductSelection {
+  constructor() {
+    this.currentSearchSessionId = null;
+  }
+
+  // Generate a new search session ID for each search
+  startNewSearch() {
+    this.currentSearchSessionId = this.generateUUID();
+    return this.currentSearchSessionId;
+  }
+
   async selectProduct(product) {
     try {
       const response = await fetch('http://localhost:8000/api/v1/selections/products', {
@@ -248,7 +303,8 @@ class ProductSelection {
           vendor_id: product.vendor_id,
           vendor_name: product.vendor_name,
           status_id: product.status_id,
-          image_url: product.image.medium || product.image.small
+          image_url: product.image.medium || product.image.small,
+          search_session_id: this.currentSearchSessionId // Only one selection per search
         })
       });
       
@@ -285,6 +341,58 @@ class ProductSelection {
     } catch (error) {
       console.error('Failed to remove product:', error);
     }
+  }
+
+  // Cart confirmation and vendor overlap analysis
+  async confirmCart() {
+    try {
+      this.showLoadingMessage('Analyzing your cart for vendor overlaps...');
+      
+      const response = await fetch('http://localhost:8000/api/v1/selections/confirm', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (response.ok) {
+        const analysis = await response.json();
+        this.displayVendorAnalysis(analysis);
+      } else {
+        const error = await response.json();
+        this.showError(error.detail || 'Failed to analyze cart');
+      }
+      
+    } catch (error) {
+      console.error('Failed to confirm cart:', error);
+      this.showError('Failed to confirm cart. Please try again.');
+    }
+  }
+
+  displayVendorAnalysis(analysis) {
+    console.log('Vendor Analysis Results:', analysis);
+    
+    // Display vendors with multiple matches
+    if (analysis.vendors_with_multiple_matches.length > 0) {
+      analysis.vendors_with_multiple_matches.forEach(vendor => {
+        console.log(`Vendor: ${vendor.vendor_name}`);
+        console.log(`Matches ${vendor.matched_products_count} of your products`);
+        
+        vendor.similar_products.forEach(product => {
+          console.log(`- ${product.name}: ${product.basalam_url}`);
+        });
+      });
+    } else {
+      console.log('No vendors found with multiple matches');
+    }
+  }
+
+  generateUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c == 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
   }
 }
 ```

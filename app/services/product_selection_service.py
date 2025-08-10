@@ -20,12 +20,14 @@ class ProductSelectionService:
         # In-memory storage for selected products
         # In a real application, this would be a database
         self._selected_products: Dict[int, SelectedProduct] = {}
+        self._search_sessions: Dict[str, int] = {}  # Track which product is selected per search session
         self._lock = threading.Lock()
         self._next_id = 1
     
     def select_product(self, request: SelectProductRequest) -> SelectedProduct:
         """
         Add a product to the selection.
+        Only one product can be selected per search session.
         
         Args:
             request: Product selection request
@@ -40,6 +42,16 @@ class ProductSelectionService:
                 logger.info(f"Product {request.product_id} already selected")
                 return existing
             
+            # Check if there's already a selection from this search session
+            if request.search_session_id:
+                existing_selection_id = self._search_sessions.get(request.search_session_id)
+                if existing_selection_id:
+                    # Remove the previous selection from this search session
+                    if existing_selection_id in self._selected_products:
+                        old_product = self._selected_products[existing_selection_id]
+                        del self._selected_products[existing_selection_id]
+                        logger.info(f"Replaced previous selection {old_product.product_id} from search session {request.search_session_id}")
+            
             # Create new selected product
             selected_product = SelectedProduct(
                 id=self._next_id,
@@ -49,13 +61,19 @@ class ProductSelectionService:
                 vendor_name=request.vendor_name,
                 status_id=request.status_id,
                 image_url=request.image_url,
-                selected_at=datetime.now()
+                selected_at=datetime.now(),
+                search_session_id=request.search_session_id
             )
             
             self._selected_products[selected_product.id] = selected_product
+            
+            # Track this selection for the search session
+            if request.search_session_id:
+                self._search_sessions[request.search_session_id] = selected_product.id
+            
             self._next_id += 1
             
-            logger.info(f"Product {request.product_id} selected successfully")
+            logger.info(f"Product {request.product_id} selected successfully (search session: {request.search_session_id})")
             return selected_product
     
     def get_selected_products(self) -> SelectedProductsResponse:
@@ -111,7 +129,8 @@ class ProductSelectionService:
         with self._lock:
             count = len(self._selected_products)
             self._selected_products.clear()
-            logger.info(f"Cleared {count} selected products")
+            self._search_sessions.clear()
+            logger.info(f"Cleared {count} selected products and search sessions")
             return count
     
     def get_product_by_id(self, product_id: int) -> Optional[SelectedProduct]:
