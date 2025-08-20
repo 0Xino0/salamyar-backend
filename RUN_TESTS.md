@@ -39,7 +39,7 @@ When testing cart confirmation, you should see:
 - **Similar products found**: 50-100 per selected product
 - **Vendors analyzed**: Multiple vendors checked for overlaps
 - **Vendor matches**: Vendors that have products similar to multiple of your selections
-- **Basalam links**: Direct product links like `https://basalam.com/q/12345`
+- **Basalam links**: Direct product links like `https://basalam.com/p/12345`
 
 ## Troubleshooting
 

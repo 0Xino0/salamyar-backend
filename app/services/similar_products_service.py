@@ -223,7 +223,7 @@ class SimilarProductsService:
                     vendor_name=vendor.get("name", ""),
                     status_id=status.get("id", 0),
                     image_url=photo.get("MEDIUM") or photo.get("SMALL"),
-                    basalam_url=f"https://basalam.com/q/{product_id}",
+                    basalam_url=f"https://basalam.com/p/{product_id}",
                     original_product_id=original_product_id
                 )
                 similar_products.append(similar_product)

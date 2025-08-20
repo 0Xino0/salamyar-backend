@@ -174,7 +174,7 @@ Analyze selected products and find vendors with multiple matching items. This en
           "vendor_name": "دستسازه های هنری دستینه",
           "status_id": 2976,
           "image_url": "https://statics.basalam.com/.../image.jpg",
-          "basalam_url": "https://basalam.com/q/16143448",
+          "basalam_url": "https://basalam.com/p/16143448",
           "original_product_id": 17881765
         }
       ]

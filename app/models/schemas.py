@@ -97,7 +97,7 @@ class SimilarProduct(BaseModel):
     vendor_name: str
     status_id: int
     image_url: Optional[str] = None
-    basalam_url: str  # https://basalam.com/q/{product_id}
+    basalam_url: str  # https://basalam.com/p/{product_id}
     original_product_id: int  # Which user's selected product this is similar to
 
 

@@ -222,7 +222,7 @@ async def confirm_shopping_cart(
     - Analysis of vendor overlaps
     - Similar products found for each selected product
     - Vendors that carry multiple items from the user's selection
-    - Direct links to products on Basalam (https://basalam.com/q/{product_id})
+    - Direct links to products on Basalam (https://basalam.com/p/{product_id})
     """
     try:
         logger.info("Starting shopping cart confirmation process")
